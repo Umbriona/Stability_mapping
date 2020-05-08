@@ -1,0 +1,10 @@
+# Ignore folders with data
+**/data
+**/data_dist_mat
+**/figures
+
+# Ignore .fasta files
+*.fasta
+
+# Ignore model files .h5
+*.h5
