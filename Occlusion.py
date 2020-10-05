@@ -34,7 +34,7 @@ parser.add_argument('--outfolder', metavar='', default='./', type=str,
                    help='Folder to which output files should be written.')
 parser.add_argument('--imgfolder', metavar='', default = './', type=str,
                    help = 'Folder to save all Plots to')
-parser.add_argument('--topt_file', default= 'cleaned_topts.fasta', type = str,
+parser.add_argument('--seq_file', default= 'cleaned_topts.fasta', type = str,
                    help='File with sequence data')
 parser.add_argument('--model', type = str,
                    help= 'model to evaluate with occlusion data')
@@ -43,9 +43,9 @@ args = parser.parse_args()
 
 assert os.path.isdir(args.infolder), '{} is not a directory'.format(args.infolder)
 assert len(os.listdir(args.infolder))>0, '{} does not contain any files'.format(args.infolder)
-assert os.path.isfile(args.topt_file), '{} is not a file'.format(args.topt_file)
-print(args.topt_file[-5:])
-assert args.topt_file[-5:] == 'fasta', 'sequens data must have the format .fasta'
+assert os.path.isfile(args.seq_file), '{} is not a file'.format(args.seq_file)
+print(args.seq_file[-5:])
+assert args.seq_file[-5:] == 'fasta', 'sequens data must have the format .fasta'
 assert os.path.isfile(args.model), '{} is not a file'.format(args.model)
 assert args.model[:-2] != 'h5', 'The model needs to have format h5'
 
@@ -60,14 +60,14 @@ if(os.listdir(args.infolder)[0][-3:]=='pdb'):
 
 
     
-def load_sequens_data(fname_topt):
-    topt_dict = {'id':[], 'ogt':[], 'seq':[], 'seq_bin':[]}
-    for rec in SeqIO.parse(fname_topt,'fasta'):
-        topt_dict['id'].append(rec.id)
-        topt_dict['ogt'].append(float(rec.description.split()[-1]))
-        topt_dict['seq'].append(rec.seq)
-        topt_dict['seq_bin'].append(to_binary(rec.seq))
-    return topt_dict
+def load_sequens_data(fname_seq):
+    seq_dict = {'id':[], 'ogt':[], 'seq':[], 'seq_bin':[]}
+    for rec in SeqIO.parse(fname_seq,'fasta'):
+        seq_dict['id'].append(rec.id)
+        seq_dict['prop'].append(float(rec.description.split()[-1]))
+        seq_dict['seq'].append(rec.seq)
+        seq_dict['seq_bin'].append(to_binary(rec.seq))
+    return seq_dict
 
 def occlusion_seqs(seq, df, radius, window):
     global ALANINE #Initiates global variable inside local scope
@@ -140,18 +140,18 @@ def main():
     radius = 6 # 6Å
     window = 3 # 3 aminoascids 
     
-    topt_dict = load_sequens_data(args.topt_file)
+    seq_dict = load_sequens_data(args.seq_file)
     model = load_model(args.model, v = 0)
     
     for seq in os.listdir(args.outfolder):
         try:
             id_ = seq.split('_')[0]
-            sequence = topt_dict['seq_bin'][topt_dict['id'].index(id_)]
-            topt = topt_dict['ogt'][topt_dict['id'].index(id_)]
+            sequence = seq_dict['seq_bin'][seq_dict['id'].index(id_)]
+            prop_val = seq_dict['prop'][seq_dict['id'].index(id_)]
         except ValueError:
             print(seq[:-4] + ' is not in sequence data')
         original_seq = zero_padding(sequence,PADDING)
-        predict_topt = model.predict(original_seq.reshape([1,original_seq.shape[0], original_seq.shape[1]]))[0]
+        predict_prop_val = model.predict(original_seq.reshape([1,original_seq.shape[0], original_seq.shape[1]]))[0]
         df = pd.read_csv(seq, sep = '\t')
         mod_list_seq_1D, mod_list_seq_3D, m = occlusion_seqs(sequence, df, radius, window)
         
@@ -164,7 +164,7 @@ def main():
             prediction_arr_3D[i] = model.predict(mod_seq.reshape([1,mod_seq.shape[0], mod_seq.shape[1]]))[0]
         amax = np.argmax(prediction_arr_3D)
         print(np.nonzero(m[amax,:]))
-        plot_occlusion(prediction_arr_1D, prediction_arr_3D, m, topt, predict_topt, args.imgfolder, fname = id_)    
+        plot_occlusion(prediction_arr_1D, prediction_arr_3D, m, prop, predict_prop_val, args.imgfolder, fname = id_)    
         
         
     

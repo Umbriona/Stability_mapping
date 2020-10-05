@@ -116,7 +116,7 @@ class PDB_Features:
                         if ((old_res == -999 or old_res == res_seq)
                                 and (res[0] == 'A' or res[0] == ' ')
                                 and chain == curr_chain):
-                            res_atoms.append(atom)
+                            res_atoms.append(atom+res)
                             res_atoms_coords.append(tuple(map(float, (x,y,z))))
 
                         # Next residue or next chain
@@ -202,7 +202,7 @@ class PDB_Features:
         self.dist_mat.reset_index()
 
         # save to file
-        self.dist_mat.to_csv(join(folder_path, '{}_dist_mat.tsv'.format(basename(self.filename).replace('.pdb', ''))), sep='\t', index=True)
+        self.dist_mat.to_csv(join(folder_path, '{}_dist_mat.tsv'.format(basename(self.filename).replace('.ent', ''))), sep='\t', index=True)
 
 
 
