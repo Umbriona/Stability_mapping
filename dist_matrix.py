@@ -35,10 +35,7 @@ class PDB_Features:
         - All atom coordinates per residue per chain (self.res_atoms_coords)
         - Total length of protein (self.length)
         '''
-        if filename[-4:] != '.pdb':
-            raise ValueError("Only PDB files allowed")
-        if filename[-4:] == 'pdb' and os.stat(filename).st_size == 0:
-            raise ValueError("File is empty")
+        
         print('Parsing', filename, '...')
 
         self.filename = filename

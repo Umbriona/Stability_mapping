@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from Bio import SeqIO
+from Bio.PDB import PDBList
 import tensorflow as tf
 import subprocess
 from utils import to_binary, zero_padding
@@ -28,7 +29,7 @@ parser = argparse.ArgumentParser(description='''
     and saved to file. The numbering (index and columns) reflects
     the amino acids in the structure, where some are often missing.''')
 
-parser.add_argument('--infolder', metavar='', type=str,
+parser.add_argument('--pdbfolder', metavar='', type=str,
                    help='A folder with pdb files containing a protein structure or a tsv file containing all distances.')
 parser.add_argument('--outfolder', metavar='', default='./', type=str,
                    help='Folder to which output files should be written.')
@@ -41,27 +42,32 @@ parser.add_argument('--model', type = str,
 
 args = parser.parse_args()
 
-assert os.path.isdir(args.infolder), '{} is not a directory'.format(args.infolder)
-assert len(os.listdir(args.infolder))>0, '{} does not contain any files'.format(args.infolder)
+assert os.path.isdir(args.pdbfolder), '{} is not a directory'.format(args.pdbfolder)
+assert len(os.listdir(args.pdbfolder))>0, '{} does not contain any files'.format(args.pdbfolder)
 assert os.path.isfile(args.seq_file), '{} is not a file'.format(args.seq_file)
-print(args.seq_file[-5:])
 assert args.seq_file[-5:] == 'fasta', 'sequens data must have the format .fasta'
 assert os.path.isfile(args.model), '{} is not a file'.format(args.model)
 assert args.model[:-2] != 'h5', 'The model needs to have format h5'
 
-if(os.listdir(args.infolder)[0][-3:] is 'pdb' and ~os.path.isdir(args.outfolder)):
-    os.mkdir('{}_dist_mats'.format(args.infolder))
-    args.outfolder = '{}_dist_mats'.format(args.infolder)
-if(os.listdir(args.infolder)[0][-3:]=='pdb'):
-    in_ = args.infolder
-    out_ = args.outfolder
-    for file in os.listdir(args.infolder):
-        subprocess.run('python dist_matrix.py --infile {} --outfolder {}'.format(os.path.join(in_,file), out_), shell=True)
+
+pdb_ids = [] 
+in_ = args.pdbfolder
+out_ = args.outfolder
+pdbl = PDBList()    
+# Get pdb ids to calculate dist maps for    
+for rec in SeqIO.parse(args.seq_file, 'fasta'):
+    pdb_ids.append(rec.id)      
+for file_id in pdb_ids:
+    # if pdb file i´not in folder download it
+    if(~os.path.isfile('pdb'+file_id+'.ent')):
+        pdbl.retrieve_pdb_file(file_id,  pdir= args.pdbfolder, file_format='pdb')
+    # Calculate distance maps
+    subprocess.run('python dist_matrix.py --infile {} --outfolder {}'.format(os.path.join(in_,'pdb'+file_id.lower()+'.ent'), out_), shell=True)
 
 
     
 def load_sequens_data(fname_seq):
-    seq_dict = {'id':[], 'ogt':[], 'seq':[], 'seq_bin':[]}
+    seq_dict = {'id':[], 'prop':[], 'seq':[], 'seq_bin':[]}
     for rec in SeqIO.parse(fname_seq,'fasta'):
         seq_dict['id'].append(rec.id)
         seq_dict['prop'].append(float(rec.description.split()[-1]))
@@ -140,31 +146,39 @@ def main():
     radius = 6 # 6Å
     window = 3 # 3 aminoascids 
     
-    seq_dict = load_sequens_data(args.seq_file)
-    model = load_model(args.model, v = 0)
     
-    for seq in os.listdir(args.outfolder):
+    seq_dict = load_sequens_data(args.seq_file)
+    print('Loaded sequence data')
+    model = load_model(args.model, v = 0)
+    print('Loaded Model')
+    seq_ids = []
+    for rec in SeqIO.parse(args.seq_file, 'fasta'):
+        seq_ids.append(rec.id) 
+    for seq in seq_ids:
         try:
-            id_ = seq.split('_')[0]
-            sequence = seq_dict['seq_bin'][seq_dict['id'].index(id_)]
-            prop_val = seq_dict['prop'][seq_dict['id'].index(id_)]
+            #id_ = seq.split('_')[0]
+            sequence = seq_dict['seq_bin'][seq_dict['id'].index(seq)]
+            prop_val = seq_dict['prop'][seq_dict['id'].index(seq)]
         except ValueError:
             print(seq[:-4] + ' is not in sequence data')
+            continue
         original_seq = zero_padding(sequence,PADDING)
         predict_prop_val = model.predict(original_seq.reshape([1,original_seq.shape[0], original_seq.shape[1]]))[0]
-        df = pd.read_csv(seq, sep = '\t')
+        df = pd.read_csv(os.path.join(args.outfolder,'pdb'+seq.lower()+'_dist_mat.tsv'), sep = '\t')
         mod_list_seq_1D, mod_list_seq_3D, m = occlusion_seqs(sequence, df, radius, window)
-        
+        print('Done calculationg occlusion sequences')
         prediction_arr_1D = np.zeros(len(mod_list_seq_1D)) # Predicting on all the 1D occluded sequences
         for i, mod_seq in enumerate(mod_list_seq_1D):
             prediction_arr_1D[i] = model.predict(mod_seq.reshape([1,mod_seq.shape[0], mod_seq.shape[1]]))[0]
+        print('Done predicting 1D occlusion')
             
         prediction_arr_3D = np.zeros([len(mod_list_seq_3D)]) # Predicting on all the 3D occluded sequences
         for i, mod_seq in enumerate(mod_list_seq_3D):
             prediction_arr_3D[i] = model.predict(mod_seq.reshape([1,mod_seq.shape[0], mod_seq.shape[1]]))[0]
+        print('Done predicting 3D occlusion')
         amax = np.argmax(prediction_arr_3D)
-        print(np.nonzero(m[amax,:]))
-        plot_occlusion(prediction_arr_1D, prediction_arr_3D, m, prop, predict_prop_val, args.imgfolder, fname = id_)    
+
+        plot_occlusion(prediction_arr_1D, prediction_arr_3D, m, prop_val, predict_prop_val, args.imgfolder, fname = seq)    
         
         
     
