@@ -93,7 +93,7 @@ def occlusion_seqs(seq, df, radius, window):
         mod_list_seq_3D.append(tmp)
     
     mod_list_seq_1D = []
-    for i in range(size_seq - window):
+    for i in range(size_seq - window + 1):
         tmp = np.zeros([seq.shape[0],seq.shape[1]])
         logic = np.zeros(seq.shape[0], dtype = bool)
         logic[i:i+window] = True
